@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Billing</title>
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    .admin-popup {
+      position: fixed;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      background: white;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 0 20px rgba(0,0,0,0.3);
+      z-index: 999;
+      display: none;
+    }
+    .admin-popup input { margin: 5px 0; padding: 8px; width: 100%; }
+    .admin-popup button { margin-top: 10px; }
+  </style>
+</head>
+<body onload="checkLoginAndLoadItems()">
+
+  <!-- Navigation -->
+  <nav class="navbar">
+    <div class="nav-left"><h2>Inventory System</h2></div>
+    <div class="nav-links">
+      <a href="dashboard.html">Dashboard</a>
+      <a href="billing.html">Billing</a>
+      <a href="reports.html">Reports</a>
+      <a href="items.html" class="admin-only">Items</a>
+      <a href="admin.html" class="admin-only">Admin</a>
+      <span id="username-display"></span>
+      <button onclick="logout()">Logout</button>
+    </div>
+  </nav>
+
+  <main class="dashboard-content">
+    <h1>Create Bill</h1>
+
+    <div class="form-section">
+      <select id="itemSelect"><option value="">Select Item</option></select>
+      <input type="number" id="qtyInput" placeholder="Qty" />
+      <button onclick="addToCart()">Add to Cart</button>
+    </div>
+
+    <h2>Cart</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Item</th><th>Qty</th><th>Price</th><th>Total</th><th>Change Price</th><th>Remove</th>
+        </tr>
+      </thead>
+      <tbody id="cartTable"></tbody>
+    </table>
+
+    <h3>Total: Rs. <span id="grandTotal">0.00</span></h3>
+    <button onclick="confirmBill()">Confirm & Print</button>
+  </main>
+
+  <!-- Admin Auth Popup -->
+  <div class="admin-popup" id="adminPopup">
+    <h3>Admin Authentication</h3>
+    <input type="text" id="adminUsername" placeholder="Admin Username" />
+    <input type="password" id="adminPassword" placeholder="Admin Password" />
+    <button onclick="verifyAdmin()">Verify & Update</button>
+    <button onclick="closeAdminPopup()">Cancel</button>
+    <p id="authError" style="color:red;"></p>
+  </div>
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+  <script src="firebase-config.js"></script>
+
+  <script>
+    let cart = [];
+    let allItems = {};
+    let pendingPriceChange = null;
+
+    function checkLoginAndLoadItems() {
+      const user = sessionStorage.getItem('username');
+      const role = sessionStorage.getItem('role');
+      if (!user) return (window.location.href = 'index.html');
+      document.getElementById('username-display').innerText = `Logged in as: ${user}`;
+      if (role !== 'admin') document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none');
+      loadItems();
+    }
+
+    function logout() {
+      firebase.auth().signOut().then(() => {
+        sessionStorage.clear();
+        window.location.href = 'index.html';
+      });
+    }
+
+    async function loadItems() {
+      const select = document.getElementById('itemSelect');
+      select.innerHTML = `<option value="">Select Item</option>`;
+      const snapshot = await db.collection('items').get();
+      snapshot.forEach(doc => {
+        const d = doc.data();
+        allItems[doc.id] = d;
+        select.innerHTML += `<option value="${doc.id}" data-name="${d.name}" data-price="${d.price}" data-stock="${d.stock}">
+          ${d.name} (Rs. ${d.price})
+        </option>`;
+      });
+    }
+
+    function addToCart() {
+      const select = document.getElementById('itemSelect');
+      const qty = parseInt(document.getElementById('qtyInput').value);
+      const id = select.value;
+      if (!id || isNaN(qty) || qty <= 0) return alert('Select valid item and quantity.');
+      const item = allItems[id];
+      if (qty > item.stock) return alert('Not enough stock.');
+      cart.push({ id, name: item.name, price: item.price, qty });
+      document.getElementById('qtyInput').value = '';
+      renderCart();
+    }
+
+    function renderCart() {
+      const table = document.getElementById('cartTable');
+      table.innerHTML = '';
+      let total = 0;
+
+      cart.forEach((item, i) => {
+        const itemTotal = item.qty * item.price;
+        total += itemTotal;
+        table.innerHTML += `
+          <tr>
+            <td>${item.name}</td>
+            <td>${item.qty}</td>
+            <td>Rs. ${item.price}</td>
+            <td>Rs. ${itemTotal.toFixed(2)}</td>
+            <td>
+              <input type="number" id="newPrice_${i}" placeholder="New Price" style="width:80px;" />
+              <button onclick="initPriceChange(${i})">Change</button>
+            </td>
+            <td><button onclick="removeFromCart(${i})">Remove</button></td>
+          </tr>
+        `;
+      });
+      document.getElementById('grandTotal').innerText = total.toFixed(2);
+    }
+
+    function removeFromCart(index) {
+      cart.splice(index, 1);
+      renderCart();
+    }
+
+    function initPriceChange(index) {
+      const newPrice = parseFloat(document.getElementById(`newPrice_${index}`).value);
+      if (isNaN(newPrice) || newPrice <= 0) {
+        alert('Enter a valid price');
+        return;
+      }
+      pendingPriceChange = { index, newPrice };
+      document.getElementById('adminPopup').style.display = 'block';
+    }
+
+    function closeAdminPopup() {
+      document.getElementById('adminPopup').style.display = 'none';
+      document.getElementById('adminUsername').value = '';
+      document.getElementById('adminPassword').value = '';
+      document.getElementById('authError').innerText = '';
+      pendingPriceChange = null;
+    }
+
+    async function verifyAdmin() {
+      const username = document.getElementById('adminUsername').value.trim();
+      const password = document.getElementById('adminPassword').value;
+
+      const userSnapshot = await db.collection("users").where("username", "==", username).limit(1).get();
+      if (userSnapshot.empty) return showAuthError("Invalid admin username");
+
+      const user = userSnapshot.docs[0].data();
+      if (user.role !== "admin") return showAuthError("Not an admin account");
+
+      try {
+        await firebase.auth().signInWithEmailAndPassword(user.email, password);
+        cart[pendingPriceChange.index].price = pendingPriceChange.newPrice;
+        renderCart();
+        closeAdminPopup();
+        alert("Price changed successfully.");
+      } catch (err) {
+        showAuthError("Incorrect password");
+      }
+    }
+
+    function showAuthError(msg) {
+      document.getElementById('authError').innerText = msg;
+    }
+
+    async function confirmBill() {
+      if (cart.length === 0) return alert("Cart is empty.");
+      const username = sessionStorage.getItem("username");
+      const total = cart.reduce((t, i) => t + i.qty * i.price, 0);
+      const batch = db.batch();
+      for (let item of cart) {
+        const ref = db.collection("items").doc(item.id);
+        const snap = await ref.get();
+        const newStock = snap.data().stock - item.qty;
+        batch.update(ref, { stock: newStock });
+      }
+
+      const bill = {
+        createdBy: username,
+        date: new Date().toISOString(),
+        items: cart,
+        total
+      };
+
+      const billRef = db.collection("bills").doc();
+      batch.set(billRef, bill);
+      await batch.commit();
+      printBill(bill);
+      cart = [];
+      renderCart();
+      loadItems();
+    }
+
+    function printBill(data) {
+      let html = `<h2>Sales Bill</h2><p><strong>User:</strong> ${data.createdBy}</p>`;
+      html += `<p><strong>Date:</strong> ${new Date(data.date).toLocaleString()}</p>`;
+      html += `<table border="1" style="width:100%; border-collapse: collapse;"><tr><th>Item</th><th>Qty</th><th>Price</th><th>Total</th></tr>`;
+      data.items.forEach(i => {
+        html += `<tr><td>${i.name}</td><td>${i.qty}</td><td>${i.price}</td><td>${(i.qty * i.price).toFixed(2)}</td></tr>`;
+      });
+      html += `</table><h3>Total: Rs. ${data.total.toFixed(2)}</h3>`;
+      const win = window.open('', '', 'width=600,height=800');
+      win.document.write(html);
+      win.document.close();
+      win.print();
+    }
+  </script>
+</body>
+</html>

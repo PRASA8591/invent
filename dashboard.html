@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Dashboard</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="icon" href="12favicon.png" type="image/png">
+</head>
+<body onload="checkLogin()">
+  <nav class="navbar">
+    <div class="nav-left"><h2>Inventory System</h2></div>
+    <div class="nav-links">
+      <a href="dashboard.html">Dashboard</a>
+      <a href="billing.html">Billing</a>
+      <a href="reports.html">Reports</a>
+      <a href="items.html" class="admin-only">Items</a>
+      <a href="admin.html" class="admin-only">Admin</a>
+      <span id="username-display"></span>
+      <button onclick="logout()">Logout</button>
+    </div>
+  </nav>
+
+  <main class="dashboard-content">
+    <h1>Welcome to Dashboard</h1>
+    <p>This is the main overview panel.</p>
+  </main>
+
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+  <script src="firebase-config.js"></script>
+  <script>
+    function checkLogin() {
+      const user = sessionStorage.getItem('username');
+      const role = sessionStorage.getItem('role');
+      if (!user) window.location.href = 'index.html';
+      document.getElementById('username-display').innerText = 'Logged in as: ' + user;
+      if (role !== 'admin') {
+        document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none');
+      }
+    }
+
+    function logout() {
+      firebase.auth().signOut().then(() => {
+        sessionStorage.clear();
+        window.location.href = 'index.html';
+      });
+    }
+  </script>
+</body>
+</html>

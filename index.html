@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title> My Store</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="icon" href="12favicon.png" type="image/png">
+</head>
+<body>
+  <div class="login-container">
+    <div class="login-box">
+      <h1>My Store</h1>
+      <input type="text" id="username" placeholder="Username" />
+      <input type="password" id="password" placeholder="Password" />
+      <button onclick="loginUser()">Login</button>
+      <p id="error-message"></p>
+    </div>
+  </div>
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+
+  <!-- Firebase Config -->
+  <script src="firebase-config.js"></script>
+
+  <!-- Login Logic -->
+  <script>
+    async function loginUser() {
+      const username = document.getElementById('username').value.trim();
+      const password = document.getElementById('password').value;
+
+      try {
+        const userSnapshot = await db.collection('users')
+          .where('username', '==', username).limit(1).get();
+
+        if (userSnapshot.empty) {
+          document.getElementById('error-message').innerText = 'Invalid username';
+          return;
+        }
+
+        const userData = userSnapshot.docs[0].data();
+        await auth.signInWithEmailAndPassword(userData.email, password);
+
+        sessionStorage.setItem('username', username);
+        sessionStorage.setItem('role', userData.role);
+        window.location.href = 'dashboard.html';
+      } catch (error) {
+        document.getElementById('error-message').innerText = error.message;
+      }
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Item Audit Logs</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="icon" href="12favicon.png" type="image/png">
+</head>
+<body onload="checkAdminAccess()">
+
+  <!-- Navigation -->
+  <nav class="navbar">
+    <div class="nav-left"><h2>Inventory System</h2></div>
+    <div class="nav-links">
+      <a href="dashboard.html">Dashboard</a>
+      <a href="billing.html">Billing</a>
+      <a href="reports.html">Reports</a>
+      <a href="items.html">Items</a>
+      <a href="admin.html">Admin</a>
+      <a href="item_logs.html">Logs</a>
+      <span id="username-display"></span>
+      <button onclick="logout()">Logout</button>
+    </div>
+  </nav>
+
+  <!-- Content -->
+  <main class="dashboard-content">
+    <h1>Item Audit Logs</h1>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Item</th>
+          <th>Action</th>
+          <th>Details</th>
+          <th>By</th>
+          <th>Date</th>
+        </tr>
+      </thead>
+      <tbody id="logTableBody"></tbody>
+    </table>
+  </main>
+
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+  <script src="firebase-config.js"></script>
+
+  <!-- Logic -->
+  <script>
+    function checkAdminAccess() {
+      const user = sessionStorage.getItem('username');
+      const role = sessionStorage.getItem('role');
+      if (!user || role !== 'admin') {
+        alert('Admins only');
+        window.location.href = 'dashboard.html';
+        return;
+      }
+
+      document.getElementById('username-display').innerText = `Logged in as: ${user}`;
+      loadLogs();
+    }
+
+    function logout() {
+      firebase.auth().signOut().then(() => {
+        sessionStorage.clear();
+        window.location.href = 'index.html';
+      });
+    }
+
+    async function loadLogs() {
+      const table = document.getElementById('logTableBody');
+      table.innerHTML = '';
+
+      const snapshot = await db.collection('item_audit_logs').orderBy('date', 'desc').limit(100).get();
+
+      snapshot.forEach(doc => {
+        const log = doc.data();
+        const date = new Date(log.date).toLocaleString();
+        let details = '';
+
+        if (log.type === 'add_stock') {
+          details = `+${log.quantityAdded} units`;
+        } else if (log.type === 'change_price') {
+          details = `New Price: Rs. ${log.newPrice}`;
+        }
+
+        table.innerHTML += `
+          <tr>
+            <td>${log.itemName || '—'}</td>
+            <td>${log.type.replace('_', ' ')}</td>
+            <td>${details}</td>
+            <td>${log.addedBy || log.changedBy || '—'}</td>
+            <td>${date}</td>
+          </tr>
+        `;
+      });
+    }
+  </script>
+</body>
+</html>

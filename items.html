@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Manage Items</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="icon" href="12favicon.png" type="image/png">
+</head>
+<body>
+
+  <!-- Top Navigation -->
+  <nav class="navbar">
+    <div class="nav-left"><h2>Inventory System</h2></div>
+    <div class="nav-links">
+      <a href="dashboard.html">Dashboard</a>
+      <a href="billing.html">Billing</a>
+      <a href="reports.html">Reports</a>
+      <a href="items.html">Items</a>
+      <a href="admin.html">Admin</a>
+      <span id="username-display"></span>
+      <button onclick="logout()">Logout</button>
+    </div>
+  </nav>
+
+  <main class="dashboard-content">
+    <h1>Item Management</h1>
+
+    <!-- Add New Item -->
+    <div class="form-section">
+      <input type="text" id="itemName" placeholder="Item Name" />
+      <input type="number" id="itemPrice" placeholder="Price (Rs)" />
+      <input type="number" id="itemStock" placeholder="Initial Stock" />
+      <button id="addItemBtn">Add New Item</button>
+    </div>
+
+    <!-- Item Table -->
+    <h2>Current Items</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Item</th>
+          <th>Price (Rs)</th>
+          <th>Stock</th>
+          <th>Add Stock</th>
+          <th>Change Price</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody id="itemList"></tbody>
+    </table>
+  </main>
+
+  <!-- Firebase Scripts -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+  <script src="firebase-config.js"></script>
+
+  <!-- JS Logic -->
+  <script>
+    // Runs after everything is loaded
+    window.onload = function () {
+      checkAdminAccess();
+      document.getElementById("addItemBtn").onclick = addItem;
+    };
+
+    function checkAdminAccess() {
+      const user = sessionStorage.getItem("username");
+      const role = sessionStorage.getItem("role");
+
+      if (!user || role !== "admin") {
+        alert("Access denied. Admins only.");
+        window.location.href = "dashboard.html";
+        return;
+      }
+
+      document.getElementById("username-display").innerText = `Logged in as: ${user}`;
+      loadItems();
+    }
+
+    function logout() {
+      firebase.auth().signOut().then(() => {
+        sessionStorage.clear();
+        window.location.href = "index.html";
+      });
+    }
+
+    async function addItem() {
+      const name = document.getElementById("itemName").value.trim();
+      const price = parseFloat(document.getElementById("itemPrice").value);
+      const stock = parseInt(document.getElementById("itemStock").value);
+
+      if (!name || isNaN(price) || isNaN(stock)) {
+        alert("Fill all fields correctly.");
+        return;
+      }
+
+      await db.collection("items").add({ name, price, stock });
+      alert("Item added successfully.");
+      document.getElementById("itemName").value = '';
+      document.getElementById("itemPrice").value = '';
+      document.getElementById("itemStock").value = '';
+      loadItems();
+    }
+
+    async function loadItems() {
+      const table = document.getElementById("itemList");
+      table.innerHTML = "";
+      const snapshot = await db.collection("items").get();
+
+      snapshot.forEach(doc => {
+        const item = doc.data();
+        table.innerHTML += `
+          <tr>
+            <td>${item.name}</td>
+            <td>Rs. ${item.price}</td>
+            <td>${item.stock}</td>
+            <td>
+              <input type="number" id="stock_${doc.id}" style="width:70px;" placeholder="Qty" />
+              <button onclick="addStock('${doc.id}', ${item.stock}, '${item.name}')">Add</button>
+            </td>
+            <td>
+              <input type="number" id="price_${doc.id}" style="width:70px;" placeholder="New Price" />
+              <button onclick="changePrice('${doc.id}', '${item.name}')">Update</button>
+            </td>
+            <td>
+              <button onclick="deleteItem('${doc.id}')">Delete</button>
+            </td>
+          </tr>`;
+      });
+    }
+
+    async function addStock(id, currentStock, itemName) {
+      const qty = parseInt(document.getElementById(`stock_${id}`).value);
+      if (isNaN(qty) || qty <= 0) {
+        alert("Enter valid quantity.");
+        return;
+      }
+
+      const newStock = currentStock + qty;
+      await db.collection("items").doc(id).update({ stock: newStock });
+
+      await db.collection("item_audit_logs").add({
+        type: "add_stock",
+        itemId: id,
+        itemName,
+        quantityAdded: qty,
+        addedBy: sessionStorage.getItem("username"),
+        date: new Date().toISOString()
+      });
+
+      alert("Stock added & logged.");
+      loadItems();
+    }
+
+    async function changePrice(id, itemName) {
+      const newPrice = parseFloat(document.getElementById(`price_${id}`).value);
+      if (isNaN(newPrice) || newPrice <= 0) {
+        alert("Enter valid price.");
+        return;
+      }
+
+      await db.collection("items").doc(id).update({ price: newPrice });
+
+      await db.collection("item_audit_logs").add({
+        type: "change_price",
+        itemId: id,
+        itemName,
+        newPrice,
+        changedBy: sessionStorage.getItem("username"),
+        date: new Date().toISOString()
+      });
+
+      alert("Price updated & logged.");
+      loadItems();
+    }
+
+    async function deleteItem(id) {
+      if (confirm("Delete this item?")) {
+        await db.collection("items").doc(id).delete();
+        alert("Item deleted.");
+        loadItems();
+      }
+    }
+  </script>
+</body>
+</html>
