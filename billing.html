@@ -1,3 +1,4 @@
+<!-- ✅ Start of billing.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -5,6 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Billing</title>
   <link rel="stylesheet" href="style.css" />
+  <link rel="icon" href="12favicon.png" type="image/png">
   <style>
     .admin-popup {
       position: fixed;
@@ -20,12 +22,30 @@
     }
     .admin-popup input { margin: 5px 0; padding: 8px; width: 100%; }
     .admin-popup button { margin-top: 10px; }
+
+    .suggestions-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      position: absolute;
+      background: white;
+      border: 1px solid #ccc;
+      width: 300px;
+      max-height: 200px;
+      overflow-y: auto;
+      z-index: 1000;
+    }
+    .suggestions-list li {
+      padding: 8px;
+      cursor: pointer;
+    }
+    .suggestions-list li:hover {
+      background: #f0f0f0;
+    }
   </style>
-  <link rel="icon" href="12favicon.png" type="image/png">
 </head>
 <body onload="checkLoginAndLoadItems()">
 
-  <!-- Navigation -->
   <nav class="navbar">
     <div class="nav-left"><h2>Inventory System</h2></div>
     <div class="nav-links">
@@ -41,10 +61,10 @@
 
   <main class="dashboard-content">
     <h1>Create Bill</h1>
-
     <div class="form-section">
-      <select id="itemSelect"><option value="">Select Item</option></select>
-      <input type="number" id="qtyInput" placeholder="Qty" />
+      <input type="text" id="itemSearchInput" placeholder="Search Items..." autocomplete="off">
+      <ul id="itemSuggestions" class="suggestions-list"></ul>
+      <input type="number" id="qtyInput" placeholder="Qty">
       <button onclick="addToCart()">Add to Cart</button>
     </div>
 
@@ -62,11 +82,10 @@
     <button onclick="confirmBill()">Confirm & Print</button>
   </main>
 
-  <!-- Admin Auth Popup -->
   <div class="admin-popup" id="adminPopup">
     <h3>Admin Authentication</h3>
-    <input type="text" id="adminUsername" placeholder="Admin Username" />
-    <input type="password" id="adminPassword" placeholder="Admin Password" />
+    <input type="text" id="adminUsername" placeholder="Admin Username">
+    <input type="password" id="adminPassword" placeholder="Admin Password">
     <button onclick="verifyAdmin()">Verify & Update</button>
     <button onclick="closeAdminPopup()">Cancel</button>
     <p id="authError" style="color:red;"></p>
@@ -81,14 +100,20 @@
   <script>
     let cart = [];
     let allItems = {};
+    let selectedItemId = null;
     let pendingPriceChange = null;
 
     function checkLoginAndLoadItems() {
       const user = sessionStorage.getItem('username');
       const role = sessionStorage.getItem('role');
-      if (!user) return (window.location.href = 'index.html');
+      if (!user) {
+        window.location.href = 'index.html';
+        return;
+      }
       document.getElementById('username-display').innerText = `Logged in as: ${user}`;
-      if (role !== 'admin') document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none');
+      if (role !== 'admin') {
+        document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none');
+      }
       loadItems();
     }
 
@@ -100,27 +125,23 @@
     }
 
     async function loadItems() {
-      const select = document.getElementById('itemSelect');
-      select.innerHTML = `<option value="">Select Item</option>`;
       const snapshot = await db.collection('items').get();
+      allItems = {};
       snapshot.forEach(doc => {
-        const d = doc.data();
-        allItems[doc.id] = d;
-        select.innerHTML += `<option value="${doc.id}" data-name="${d.name}" data-price="${d.price}" data-stock="${d.stock}">
-          ${d.name} (Rs. ${d.price})
-        </option>`;
+        allItems[doc.id] = doc.data();
       });
     }
 
     function addToCart() {
-      const select = document.getElementById('itemSelect');
+      const id = selectedItemId;
       const qty = parseInt(document.getElementById('qtyInput').value);
-      const id = select.value;
       if (!id || isNaN(qty) || qty <= 0) return alert('Select valid item and quantity.');
       const item = allItems[id];
       if (qty > item.stock) return alert('Not enough stock.');
       cart.push({ id, name: item.name, price: item.price, qty });
       document.getElementById('qtyInput').value = '';
+      document.getElementById('itemSearchInput').value = '';
+      selectedItemId = null;
       renderCart();
     }
 
@@ -128,25 +149,29 @@
       const table = document.getElementById('cartTable');
       table.innerHTML = '';
       let total = 0;
-
       cart.forEach((item, i) => {
         const itemTotal = item.qty * item.price;
         total += itemTotal;
         table.innerHTML += `
           <tr>
             <td>${item.name}</td>
-            <td>${item.qty}</td>
+            <td><input type="number" value="${item.qty}" onchange="updateQty(${i}, this.value)" style="width:60px"></td>
             <td>Rs. ${item.price}</td>
             <td>Rs. ${itemTotal.toFixed(2)}</td>
-            <td>
-              <input type="number" id="newPrice_${i}" placeholder="New Price" style="width:80px;" />
-              <button onclick="initPriceChange(${i})">Change</button>
-            </td>
+            <td><input type="number" id="newPrice_${i}" placeholder="New Price" style="width:80px;">
+                <button onclick="initPriceChange(${i})">Change</button></td>
             <td><button onclick="removeFromCart(${i})">Remove</button></td>
-          </tr>
-        `;
+          </tr>`;
       });
       document.getElementById('grandTotal').innerText = total.toFixed(2);
+    }
+
+    function updateQty(index, value) {
+      const newQty = parseInt(value);
+      if (!isNaN(newQty) && newQty > 0) {
+        cart[index].qty = newQty;
+        renderCart();
+      }
     }
 
     function removeFromCart(index) {
@@ -156,10 +181,7 @@
 
     function initPriceChange(index) {
       const newPrice = parseFloat(document.getElementById(`newPrice_${index}`).value);
-      if (isNaN(newPrice) || newPrice <= 0) {
-        alert('Enter a valid price');
-        return;
-      }
+      if (isNaN(newPrice) || newPrice <= 0) return alert('Enter valid price');
       pendingPriceChange = { index, newPrice };
       document.getElementById('adminPopup').style.display = 'block';
     }
@@ -175,21 +197,19 @@
     async function verifyAdmin() {
       const username = document.getElementById('adminUsername').value.trim();
       const password = document.getElementById('adminPassword').value;
-
-      const userSnapshot = await db.collection("users").where("username", "==", username).limit(1).get();
-      if (userSnapshot.empty) return showAuthError("Invalid admin username");
-
-      const user = userSnapshot.docs[0].data();
-      if (user.role !== "admin") return showAuthError("Not an admin account");
+      const userSnap = await db.collection("users").where("username", "==", username).limit(1).get();
+      if (userSnap.empty) return showAuthError("Invalid username");
+      const user = userSnap.docs[0].data();
+      if (user.role !== "admin") return showAuthError("Not an admin");
 
       try {
         await firebase.auth().signInWithEmailAndPassword(user.email, password);
         cart[pendingPriceChange.index].price = pendingPriceChange.newPrice;
         renderCart();
         closeAdminPopup();
-        alert("Price changed successfully.");
+        alert("Price changed.");
       } catch (err) {
-        showAuthError("Incorrect password");
+        showAuthError("Wrong password.");
       }
     }
 
@@ -208,14 +228,12 @@
         const newStock = snap.data().stock - item.qty;
         batch.update(ref, { stock: newStock });
       }
-
       const bill = {
         createdBy: username,
         date: new Date().toISOString(),
         items: cart,
         total
       };
-
       const billRef = db.collection("bills").doc();
       batch.set(billRef, bill);
       await batch.commit();
@@ -226,18 +244,59 @@
     }
 
     function printBill(data) {
-      let html = `<h2>Sales Bill</h2><p><strong>User:</strong> ${data.createdBy}</p>`;
-      html += `<p><strong>Date:</strong> ${new Date(data.date).toLocaleString()}</p>`;
-      html += `<table border="1" style="width:100%; border-collapse: collapse;"><tr><th>Item</th><th>Qty</th><th>Price</th><th>Total</th></tr>`;
+      let html = `
+        <div style="width: 250px; font-family: Arial; font-size: 12px; margin: auto; padding: 10px;">
+          <h2 style="text-align: center;">My Store</h2>
+          <p><strong>User:</strong> ${data.createdBy}</p>
+          <p><strong>Date:</strong> ${new Date(data.date).toLocaleString()}</p>
+          <hr>
+          <table style="width: 100%; border-collapse: collapse;">
+            <tr><th>Item</th><th>Qty</th><th>Price</th><th>Total</th></tr>`;
       data.items.forEach(i => {
         html += `<tr><td>${i.name}</td><td>${i.qty}</td><td>${i.price}</td><td>${(i.qty * i.price).toFixed(2)}</td></tr>`;
       });
-      html += `</table><h3>Total: Rs. ${data.total.toFixed(2)}</h3>`;
-      const win = window.open('', '', 'width=600,height=800');
-      win.document.write(html);
-      win.document.close();
-      win.print();
+      html += `</table>
+          <hr><p style="text-align: right;"><strong>Total: Rs. ${data.total.toFixed(2)}</strong></p>
+          <p style="text-align: center; font-size: 10px;">Thank you and come again!</p>
+        </div>`;
+      const win = window.open('', '', 'width=300,height=600');
+      
     }
+
+    // 🔍 Live Search Logic
+    document.addEventListener('DOMContentLoaded', () => {
+      const input = document.getElementById('itemSearchInput');
+      const suggestions = document.getElementById('itemSuggestions');
+      const qtyInput = document.getElementById('qtyInput');
+
+      input.addEventListener('input', () => {
+        const query = input.value.toLowerCase();
+        suggestions.innerHTML = '';
+        if (!query) return;
+
+        Object.entries(allItems).forEach(([id, item]) => {
+          if (item.name.toLowerCase().includes(query)) {
+            const li = document.createElement('li');
+            li.textContent = `${item.name} - Rs. ${item.price} (Stock: ${item.stock})`;
+            li.onclick = () => {
+              selectedItemId = id;
+              input.value = item.name;
+              suggestions.innerHTML = '';
+              qtyInput.focus();
+            };
+            suggestions.appendChild(li);
+          }
+        });
+      });
+
+      qtyInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          addToCart();
+          input.focus();
+          e.preventDefault();
+        }
+      });
+    });
   </script>
 </body>
 </html>
