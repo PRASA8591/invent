@@ -1,32 +1,24 @@
-<!-- ✅ Start of billing.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Billing</title>
   <link rel="stylesheet" href="style.css" />
   <link rel="icon" href="12favicon.png" type="image/png">
   <style>
     .admin-popup {
       position: fixed;
-      top: 50%; left: 50%;
-      transform: translate(-50%, -50%);
-      background: white;
-      border: 1px solid #ccc;
-      border-radius: 8px;
-      padding: 20px;
+      top: 50%; left: 50%; transform: translate(-50%, -50%);
+      background: white; border: 1px solid #ccc;
+      border-radius: 8px; padding: 20px;
       box-shadow: 0 0 20px rgba(0,0,0,0.3);
-      z-index: 999;
-      display: none;
+      z-index: 999; display: none;
     }
     .admin-popup input { margin: 5px 0; padding: 8px; width: 100%; }
     .admin-popup button { margin-top: 10px; }
-
     .suggestions-list {
       list-style: none;
-      padding: 0;
-      margin: 0;
       position: absolute;
       background: white;
       border: 1px solid #ccc;
@@ -35,17 +27,11 @@
       overflow-y: auto;
       z-index: 1000;
     }
-    .suggestions-list li {
-      padding: 8px;
-      cursor: pointer;
-    }
-    .suggestions-list li:hover {
-      background: #f0f0f0;
-    }
+    .suggestions-list li { padding: 8px; cursor: pointer; }
+    .suggestions-list li:hover { background: #f0f0f0; }
   </style>
 </head>
-<body onload="checkLoginAndLoadItems()">
-
+<body>
   <nav class="navbar">
     <div class="nav-left"><h2>Inventory System</h2></div>
     <div class="nav-links">
@@ -71,73 +57,66 @@
     <h2>Cart</h2>
     <table>
       <thead>
-        <tr>
-          <th>Item</th><th>Qty</th><th>Price</th><th>Total</th><th>Change Price</th><th>Remove</th>
-        </tr>
+        <tr><th>Item</th><th>Qty</th><th>Price</th><th>Total</th><th>Change Price</th><th>Remove</th></tr>
       </thead>
       <tbody id="cartTable"></tbody>
     </table>
 
-    <h3>Total: Rs. <span id="grandTotal">0.00</span></h3>
-    <button onclick="confirmBill()">Confirm & Print</button>
+    <h3>Subtotal: Rs. <span id="subtotal">0.00</span></h3>
+    <input id="taxInput" placeholder="Tax %" style="width: 60px;"> %
+    <input id="discountInput" placeholder="Discount %" style="width: 80px;"> %
+
+    <h3>Grand Total: Rs. <span id="grandTotal">0.00</span></h3>
+    <button onclick="prepareConfirm()">Confirm</button>
   </main>
 
   <div class="admin-popup" id="adminPopup">
     <h3>Admin Authentication</h3>
-    <input type="text" id="adminUsername" placeholder="Admin Username">
+    <input id="adminUsername" placeholder="Admin Username">
     <input type="password" id="adminPassword" placeholder="Admin Password">
     <button onclick="verifyAdmin()">Verify & Update</button>
     <button onclick="closeAdminPopup()">Cancel</button>
     <p id="authError" style="color:red;"></p>
   </div>
 
-  <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
   <script src="firebase-config.js"></script>
 
   <script>
-    let cart = [];
-    let allItems = {};
-    let selectedItemId = null;
-    let pendingPriceChange = null;
+    let cart = [], allItems = {}, selectedItemId = null, pendingPriceChange = null;
+
+    window.onload = checkLoginAndLoadItems;
 
     function checkLoginAndLoadItems() {
       const user = sessionStorage.getItem('username');
       const role = sessionStorage.getItem('role');
-      if (!user) {
-        window.location.href = 'index.html';
-        return;
-      }
+      if (!user) return location.href = 'index.html';
       document.getElementById('username-display').innerText = `Logged in as: ${user}`;
-      if (role !== 'admin') {
-        document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none');
-      }
+      if (role !== 'admin') document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none');
       loadItems();
     }
 
     function logout() {
       firebase.auth().signOut().then(() => {
         sessionStorage.clear();
-        window.location.href = 'index.html';
+        location.href = 'index.html';
       });
     }
 
     async function loadItems() {
       const snapshot = await db.collection('items').get();
       allItems = {};
-      snapshot.forEach(doc => {
-        allItems[doc.id] = doc.data();
-      });
+      snapshot.forEach(doc => allItems[doc.id] = doc.data());
     }
 
     function addToCart() {
       const id = selectedItemId;
       const qty = parseInt(document.getElementById('qtyInput').value);
-      if (!id || isNaN(qty) || qty <= 0) return alert('Select valid item and quantity.');
+      if (!id || isNaN(qty) || qty <= 0) return alert('Invalid item or quantity');
       const item = allItems[id];
-      if (qty > item.stock) return alert('Not enough stock.');
+      if (qty > item.stock) return alert('Not enough stock');
       cart.push({ id, name: item.name, price: item.price, qty });
       document.getElementById('qtyInput').value = '';
       document.getElementById('itemSearchInput').value = '';
@@ -147,29 +126,29 @@
 
     function renderCart() {
       const table = document.getElementById('cartTable');
+      let subtotal = 0;
       table.innerHTML = '';
-      let total = 0;
       cart.forEach((item, i) => {
         const itemTotal = item.qty * item.price;
-        total += itemTotal;
-        table.innerHTML += `
-          <tr>
-            <td>${item.name}</td>
-            <td><input type="number" value="${item.qty}" onchange="updateQty(${i}, this.value)" style="width:60px"></td>
-            <td>Rs. ${item.price}</td>
-            <td>Rs. ${itemTotal.toFixed(2)}</td>
-            <td><input type="number" id="newPrice_${i}" placeholder="New Price" style="width:80px;">
-                <button onclick="initPriceChange(${i})">Change</button></td>
-            <td><button onclick="removeFromCart(${i})">Remove</button></td>
-          </tr>`;
+        subtotal += itemTotal;
+        table.innerHTML += `<tr><td>${item.name}</td>
+          <td><input type="number" value="${item.qty}" onchange="updateQty(${i}, this.value)" style="width:60px"></td>
+          <td>Rs. ${item.price}</td>
+          <td>Rs. ${itemTotal.toFixed(2)}</td>
+          <td><input type="number" id="newPrice_${i}" placeholder="New Price" style="width:80px;"><button onclick="initPriceChange(${i})">Change</button></td>
+          <td><button onclick="removeFromCart(${i})">Remove</button></td></tr>`;
       });
-      document.getElementById('grandTotal').innerText = total.toFixed(2);
+      document.getElementById('subtotal').innerText = subtotal.toFixed(2);
+      const tax = parseFloat(document.getElementById('taxInput').value) || 0;
+      const discount = parseFloat(document.getElementById('discountInput').value) || 0;
+      const grandTotal = subtotal + (subtotal * tax / 100) - (subtotal * discount / 100);
+      document.getElementById('grandTotal').innerText = grandTotal.toFixed(2);
     }
 
     function updateQty(index, value) {
-      const newQty = parseInt(value);
-      if (!isNaN(newQty) && newQty > 0) {
-        cart[index].qty = newQty;
+      const qty = parseInt(value);
+      if (!isNaN(qty) && qty > 0) {
+        cart[index].qty = qty;
         renderCart();
       }
     }
@@ -195,20 +174,19 @@
     }
 
     async function verifyAdmin() {
-      const username = document.getElementById('adminUsername').value.trim();
+      const username = document.getElementById('adminUsername').value;
       const password = document.getElementById('adminPassword').value;
-      const userSnap = await db.collection("users").where("username", "==", username).limit(1).get();
-      if (userSnap.empty) return showAuthError("Invalid username");
-      const user = userSnap.docs[0].data();
+      const snap = await db.collection("users").where("username", "==", username).limit(1).get();
+      if (snap.empty) return showAuthError("Invalid username");
+      const user = snap.docs[0].data();
       if (user.role !== "admin") return showAuthError("Not an admin");
-
       try {
         await firebase.auth().signInWithEmailAndPassword(user.email, password);
         cart[pendingPriceChange.index].price = pendingPriceChange.newPrice;
         renderCart();
         closeAdminPopup();
-        alert("Price changed.");
-      } catch (err) {
+        alert("Price updated.");
+      } catch {
         showAuthError("Wrong password.");
       }
     }
@@ -217,10 +195,13 @@
       document.getElementById('authError').innerText = msg;
     }
 
+    function prepareConfirm() {
+      if (confirm("Are you sure you want to confirm and print this bill?")) confirmBill();
+    }
+
     async function confirmBill() {
-      if (cart.length === 0) return alert("Cart is empty.");
       const username = sessionStorage.getItem("username");
-      const total = cart.reduce((t, i) => t + i.qty * i.price, 0);
+      const total = parseFloat(document.getElementById('grandTotal').innerText);
       const batch = db.batch();
       for (let item of cart) {
         const ref = db.collection("items").doc(item.id);
@@ -234,36 +215,33 @@
         items: cart,
         total
       };
-      const billRef = db.collection("bills").doc();
-      batch.set(billRef, bill);
+      const ref = db.collection("bills").doc();
+      batch.set(ref, bill);
       await batch.commit();
       printBill(bill);
       cart = [];
+      document.getElementById('taxInput').value = '';
+      document.getElementById('discountInput').value = '';
       renderCart();
       loadItems();
     }
 
     function printBill(data) {
-      let html = `
-        <div style="width: 250px; font-family: Arial; font-size: 12px; margin: auto; padding: 10px;">
-          <h2 style="text-align: center;">My Store</h2>
-          <p><strong>User:</strong> ${data.createdBy}</p>
-          <p><strong>Date:</strong> ${new Date(data.date).toLocaleString()}</p>
-          <hr>
-          <table style="width: 100%; border-collapse: collapse;">
-            <tr><th>Item</th><th>Qty</th><th>Price</th><th>Total</th></tr>`;
+      let html = `<div style="width:250px;font-family:Arial;font-size:12px;padding:10px;">
+        <h2 style="text-align:center;">My Store</h2>
+        <p><strong>User:</strong> ${data.createdBy}</p>
+        <p><strong>Date:</strong> ${new Date(data.date).toLocaleString()}</p><hr>
+        <table style="width:100%;border-collapse:collapse;">
+          <tr><th>Item</th><th>Qty</th><th>Price</th><th>Total</th></tr>`;
       data.items.forEach(i => {
-        html += `<tr><td>${i.name}</td><td>${i.qty}</td><td>${i.price}</td><td>${(i.qty * i.price).toFixed(2)}</td></tr>`;
+        html += `<tr><td>${i.name}</td><td>${i.qty}</td><td>${i.price}</td><td>${(i.qty*i.price).toFixed(2)}</td></tr>`;
       });
-      html += `</table>
-          <hr><p style="text-align: right;"><strong>Total: Rs. ${data.total.toFixed(2)}</strong></p>
-          <p style="text-align: center; font-size: 10px;">Thank you and come again!</p>
-        </div>`;
+      html += `</table><hr><p style="text-align:right;"><strong>Total: Rs. ${data.total.toFixed(2)}</strong></p>
+        <p style="text-align:center;font-size:10px;">Thank you and come again!</p></div>`;
       const win = window.open('', '', 'width=300,height=600');
       
     }
 
-    // 🔍 Live Search Logic
     document.addEventListener('DOMContentLoaded', () => {
       const input = document.getElementById('itemSearchInput');
       const suggestions = document.getElementById('itemSuggestions');
@@ -272,8 +250,7 @@
       input.addEventListener('input', () => {
         const query = input.value.toLowerCase();
         suggestions.innerHTML = '';
-        if (!query) return;
-
+        if (!query && Object.keys(allItems).length === 0) return;
         Object.entries(allItems).forEach(([id, item]) => {
           if (item.name.toLowerCase().includes(query)) {
             const li = document.createElement('li');
@@ -289,6 +266,16 @@
         });
       });
 
+      input.addEventListener('focus', () => {
+        input.dispatchEvent(new Event('input'));
+      });
+
+      document.addEventListener('click', function (e) {
+        if (!input.contains(e.target) && !suggestions.contains(e.target)) {
+          suggestions.innerHTML = '';
+        }
+      });
+
       qtyInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
           addToCart();
@@ -296,6 +283,9 @@
           e.preventDefault();
         }
       });
+
+      document.getElementById('taxInput').addEventListener('input', renderCart);
+      document.getElementById('discountInput').addEventListener('input', renderCart);
     });
   </script>
 </body>
