@@ -2,23 +2,29 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Billing</title>
   <link rel="stylesheet" href="style.css" />
   <link rel="icon" href="12favicon.png" type="image/png">
   <style>
     .admin-popup {
       position: fixed;
-      top: 50%; left: 50%; transform: translate(-50%, -50%);
-      background: white; border: 1px solid #ccc;
-      border-radius: 8px; padding: 20px;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      background: white;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      padding: 20px;
       box-shadow: 0 0 20px rgba(0,0,0,0.3);
-      z-index: 999; display: none;
+      z-index: 999;
+      display: none;
     }
     .admin-popup input { margin: 5px 0; padding: 8px; width: 100%; }
     .admin-popup button { margin-top: 10px; }
     .suggestions-list {
       list-style: none;
+      padding: 0;
+      margin: 0;
       position: absolute;
       background: white;
       border: 1px solid #ccc;
@@ -27,11 +33,17 @@
       overflow-y: auto;
       z-index: 1000;
     }
-    .suggestions-list li { padding: 8px; cursor: pointer; }
-    .suggestions-list li:hover { background: #f0f0f0; }
+    .suggestions-list li {
+      padding: 8px;
+      cursor: pointer;
+    }
+    .suggestions-list li:hover {
+      background: #f0f0f0;
+    }
   </style>
 </head>
 <body>
+
   <nav class="navbar">
     <div class="nav-left"><h2>Inventory System</h2></div>
     <div class="nav-links">
@@ -48,7 +60,7 @@
   <main class="dashboard-content">
     <h1>Create Bill</h1>
     <div class="form-section">
-      <input type="text" id="itemSearchInput" placeholder="Search Items..." autocomplete="off">
+      <input type="text" id="itemSearchInput" placeholder="Search Items..." autocomplete="off" onfocus="showAllItems()">
       <ul id="itemSuggestions" class="suggestions-list"></ul>
       <input type="number" id="qtyInput" placeholder="Qty">
       <button onclick="addToCart()">Add to Cart</button>
@@ -57,28 +69,32 @@
     <h2>Cart</h2>
     <table>
       <thead>
-        <tr><th>Item</th><th>Qty</th><th>Price</th><th>Total</th><th>Change Price</th><th>Remove</th></tr>
+        <tr>
+          <th>Item</th><th>Qty</th><th>Price</th><th>Total</th><th>Change Price</th><th>Remove</th>
+        </tr>
       </thead>
       <tbody id="cartTable"></tbody>
     </table>
 
-    <h3>Subtotal: Rs. <span id="subtotal">0.00</span></h3>
-    <input id="taxInput" placeholder="Tax %" style="width: 60px;"> %
-    <input id="discountInput" placeholder="Discount %" style="width: 80px;"> %
-
+    <h3>Subtotal: Rs. <span id="subtotalAmount">0.00</span></h3>
+    <div>
+      <input type="number" id="taxInput" placeholder="Tax %" style="width:100px;"> %
+      <input type="number" id="discountInput" placeholder="Discount %" style="width:100px;"> %
+    </div>
     <h3>Grand Total: Rs. <span id="grandTotal">0.00</span></h3>
-    <button onclick="prepareConfirm()">Confirm</button>
+    <button onclick="confirmBeforePrint()">Confirm</button>
   </main>
 
   <div class="admin-popup" id="adminPopup">
     <h3>Admin Authentication</h3>
-    <input id="adminUsername" placeholder="Admin Username">
+    <input type="text" id="adminUsername" placeholder="Admin Username">
     <input type="password" id="adminPassword" placeholder="Admin Password">
     <button onclick="verifyAdmin()">Verify & Update</button>
     <button onclick="closeAdminPopup()">Cancel</button>
     <p id="authError" style="color:red;"></p>
   </div>
 
+  <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
@@ -87,81 +103,57 @@
   <script>
     let cart = [], allItems = {}, selectedItemId = null, pendingPriceChange = null;
 
-    window.onload = checkLoginAndLoadItems;
-
     function checkLoginAndLoadItems() {
       const user = sessionStorage.getItem('username');
       const role = sessionStorage.getItem('role');
       if (!user) return location.href = 'index.html';
-      document.getElementById('username-display').innerText = `Logged in as: ${user}`;
-      if (role !== 'admin') document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none');
+      document.getElementById('username-display').innerText = 'Logged in as: ' + user;
+      if (role !== 'admin') document.querySelectorAll('.admin-only').forEach(e => e.style.display = 'none');
       loadItems();
     }
 
     function logout() {
-      firebase.auth().signOut().then(() => {
-        sessionStorage.clear();
-        location.href = 'index.html';
-      });
+      sessionStorage.clear();
+      location.href = 'index.html';
     }
 
     async function loadItems() {
-      const snapshot = await db.collection('items').get();
+      const snapshot = await db.collection("items").get();
       allItems = {};
-      snapshot.forEach(doc => allItems[doc.id] = doc.data());
+      snapshot.forEach(doc => {
+        allItems[doc.id] = doc.data();
+      });
     }
 
     function addToCart() {
-      const id = selectedItemId;
       const qty = parseInt(document.getElementById('qtyInput').value);
-      if (!id || isNaN(qty) || qty <= 0) return alert('Invalid item or quantity');
-      const item = allItems[id];
+      if (!selectedItemId || isNaN(qty) || qty <= 0) return alert('Valid item and quantity required');
+      const item = allItems[selectedItemId];
       if (qty > item.stock) return alert('Not enough stock');
-      cart.push({ id, name: item.name, price: item.price, qty });
-      document.getElementById('qtyInput').value = '';
+      cart.push({ id: selectedItemId, name: item.name, price: item.price, qty });
       document.getElementById('itemSearchInput').value = '';
+      document.getElementById('qtyInput').value = '';
       selectedItemId = null;
       renderCart();
     }
 
-    function renderCart() {
-      const table = document.getElementById('cartTable');
-      let subtotal = 0;
-      table.innerHTML = '';
-      cart.forEach((item, i) => {
-        const itemTotal = item.qty * item.price;
-        subtotal += itemTotal;
-        table.innerHTML += `<tr><td>${item.name}</td>
-          <td><input type="number" value="${item.qty}" onchange="updateQty(${i}, this.value)" style="width:60px"></td>
-          <td>Rs. ${item.price}</td>
-          <td>Rs. ${itemTotal.toFixed(2)}</td>
-          <td><input type="number" id="newPrice_${i}" placeholder="New Price" style="width:80px;"><button onclick="initPriceChange(${i})">Change</button></td>
-          <td><button onclick="removeFromCart(${i})">Remove</button></td></tr>`;
-      });
-      document.getElementById('subtotal').innerText = subtotal.toFixed(2);
-      const tax = parseFloat(document.getElementById('taxInput').value) || 0;
-      const discount = parseFloat(document.getElementById('discountInput').value) || 0;
-      const grandTotal = subtotal + (subtotal * tax / 100) - (subtotal * discount / 100);
-      document.getElementById('grandTotal').innerText = grandTotal.toFixed(2);
-    }
-
-    function updateQty(index, value) {
-      const qty = parseInt(value);
+    function updateQty(i, val) {
+      let qty = parseInt(val);
       if (!isNaN(qty) && qty > 0) {
-        cart[index].qty = qty;
+        cart[i].qty = qty;
         renderCart();
       }
     }
 
-    function removeFromCart(index) {
-      cart.splice(index, 1);
+    function removeFromCart(i) {
+      cart.splice(i, 1);
       renderCart();
     }
 
-    function initPriceChange(index) {
-      const newPrice = parseFloat(document.getElementById(`newPrice_${index}`).value);
-      if (isNaN(newPrice) || newPrice <= 0) return alert('Enter valid price');
-      pendingPriceChange = { index, newPrice };
+    function initPriceChange(i) {
+      let newPrice = parseFloat(document.getElementById(`newPrice_${i}`).value);
+      if (isNaN(newPrice) || newPrice <= 0) return alert("Invalid price");
+      pendingPriceChange = { index: i, newPrice };
       document.getElementById('adminPopup').style.display = 'block';
     }
 
@@ -170,123 +162,98 @@
       document.getElementById('adminUsername').value = '';
       document.getElementById('adminPassword').value = '';
       document.getElementById('authError').innerText = '';
-      pendingPriceChange = null;
     }
 
-    async function verifyAdmin() {
-      const username = document.getElementById('adminUsername').value;
-      const password = document.getElementById('adminPassword').value;
-      const snap = await db.collection("users").where("username", "==", username).limit(1).get();
-      if (snap.empty) return showAuthError("Invalid username");
-      const user = snap.docs[0].data();
-      if (user.role !== "admin") return showAuthError("Not an admin");
-      try {
-        await firebase.auth().signInWithEmailAndPassword(user.email, password);
-        cart[pendingPriceChange.index].price = pendingPriceChange.newPrice;
-        renderCart();
-        closeAdminPopup();
-        alert("Price updated.");
-      } catch {
-        showAuthError("Wrong password.");
-      }
+    function verifyAdmin() {
+      cart[pendingPriceChange.index].price = pendingPriceChange.newPrice;
+      closeAdminPopup();
+      renderCart();
+      alert('Price changed');
     }
 
-    function showAuthError(msg) {
-      document.getElementById('authError').innerText = msg;
+    function renderCart() {
+      const tbody = document.getElementById('cartTable');
+      tbody.innerHTML = '';
+      let subtotal = 0;
+      cart.forEach((item, i) => {
+        const total = item.qty * item.price;
+        subtotal += total;
+        tbody.innerHTML += `
+          <tr>
+            <td>${item.name}</td>
+            <td><input type="number" value="${item.qty}" onchange="updateQty(${i}, this.value)" style="width:60px"></td>
+            <td>Rs. ${item.price}</td>
+            <td>Rs. ${total.toFixed(2)}</td>
+            <td><input type="number" id="newPrice_${i}" placeholder="New Price" style="width:80px;">
+                <button onclick="initPriceChange(${i})">Change</button></td>
+            <td><button onclick="removeFromCart(${i})">Remove</button></td>
+          </tr>`;
+      });
+      document.getElementById('subtotalAmount').innerText = subtotal.toFixed(2);
+      updateGrandTotal();
     }
 
-    function prepareConfirm() {
-      if (confirm("Are you sure you want to confirm and print this bill?")) confirmBill();
+    function updateGrandTotal() {
+      let subtotal = cart.reduce((sum, item) => sum + item.qty * item.price, 0);
+      const tax = parseFloat(document.getElementById('taxInput').value) || 0;
+      const discount = parseFloat(document.getElementById('discountInput').value) || 0;
+      const taxAmt = subtotal * (tax / 100);
+      const discountAmt = subtotal * (discount / 100);
+      const grand = subtotal + taxAmt - discountAmt;
+      document.getElementById('grandTotal').innerText = grand.toFixed(2);
     }
 
-    async function confirmBill() {
-      const username = sessionStorage.getItem("username");
-      const total = parseFloat(document.getElementById('grandTotal').innerText);
-      const batch = db.batch();
-      for (let item of cart) {
-        const ref = db.collection("items").doc(item.id);
-        const snap = await ref.get();
-        const newStock = snap.data().stock - item.qty;
-        batch.update(ref, { stock: newStock });
-      }
-      const bill = {
-        createdBy: username,
-        date: new Date().toISOString(),
-        items: cart,
-        total
-      };
-      const ref = db.collection("bills").doc();
-      batch.set(ref, bill);
-      await batch.commit();
-      printBill(bill);
+    document.getElementById('taxInput').addEventListener('input', updateGrandTotal);
+    document.getElementById('discountInput').addEventListener('input', updateGrandTotal);
+
+    function confirmBeforePrint() {
+      if (!cart.length) return alert('Cart is empty');
+      if (confirm('Are you sure you want to confirm this bill?')) printBill();
+    }
+
+    function printBill() {
+      const newWin = window.open('', '', 'width=400,height=600');
+      newWin.document.write('<html><head><title>Bill</title></head><body><h2>Final Bill</h2><hr>');
+      cart.forEach(i => {
+        newWin.document.write(`<p>${i.name} - ${i.qty} x Rs.${i.price} = Rs.${(i.qty * i.price).toFixed(2)}</p>`);
+      });
+      
+      newWin.document.close();
+      newWin.focus();
+      newWin.print();
+      newWin.close();
       cart = [];
+      document.getElementById('itemSearchInput').value = '';
+      document.getElementById('qtyInput').value = '';
       document.getElementById('taxInput').value = '';
       document.getElementById('discountInput').value = '';
       renderCart();
-      loadItems();
     }
 
-    function printBill(data) {
-      let html = `<div style="width:250px;font-family:Arial;font-size:12px;padding:10px;">
-        <h2 style="text-align:center;">My Store</h2>
-        <p><strong>User:</strong> ${data.createdBy}</p>
-        <p><strong>Date:</strong> ${new Date(data.date).toLocaleString()}</p><hr>
-        <table style="width:100%;border-collapse:collapse;">
-          <tr><th>Item</th><th>Qty</th><th>Price</th><th>Total</th></tr>`;
-      data.items.forEach(i => {
-        html += `<tr><td>${i.name}</td><td>${i.qty}</td><td>${i.price}</td><td>${(i.qty*i.price).toFixed(2)}</td></tr>`;
-      });
-      html += `</table><hr><p style="text-align:right;"><strong>Total: Rs. ${data.total.toFixed(2)}</strong></p>
-        <p style="text-align:center;font-size:10px;">Thank you and come again!</p></div>`;
-      const win = window.open('', '', 'width=300,height=600');
-      
-    }
-
-    document.addEventListener('DOMContentLoaded', () => {
+    function showAllItems() {
       const input = document.getElementById('itemSearchInput');
       const suggestions = document.getElementById('itemSuggestions');
-      const qtyInput = document.getElementById('qtyInput');
-
-      input.addEventListener('input', () => {
-        const query = input.value.toLowerCase();
-        suggestions.innerHTML = '';
-        if (!query && Object.keys(allItems).length === 0) return;
-        Object.entries(allItems).forEach(([id, item]) => {
-          if (item.name.toLowerCase().includes(query)) {
-            const li = document.createElement('li');
-            li.textContent = `${item.name} - Rs. ${item.price} (Stock: ${item.stock})`;
-            li.onclick = () => {
-              selectedItemId = id;
-              input.value = item.name;
-              suggestions.innerHTML = '';
-              qtyInput.focus();
-            };
-            suggestions.appendChild(li);
-          }
-        });
-      });
-
-      input.addEventListener('focus', () => {
-        input.dispatchEvent(new Event('input'));
-      });
-
-      document.addEventListener('click', function (e) {
-        if (!input.contains(e.target) && !suggestions.contains(e.target)) {
+      suggestions.innerHTML = '';
+      Object.entries(allItems).forEach(([id, item]) => {
+        const li = document.createElement('li');
+        li.textContent = `${item.name} - Rs. ${item.price} (Stock: ${item.stock})`;
+        li.onclick = () => {
+          selectedItemId = id;
+          input.value = item.name;
           suggestions.innerHTML = '';
-        }
+          document.getElementById('qtyInput').focus();
+        };
+        suggestions.appendChild(li);
       });
+    }
 
-      qtyInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-          addToCart();
-          input.focus();
-          e.preventDefault();
-        }
-      });
-
-      document.getElementById('taxInput').addEventListener('input', renderCart);
-      document.getElementById('discountInput').addEventListener('input', renderCart);
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('#itemSearchInput') && !e.target.closest('#itemSuggestions')) {
+        document.getElementById('itemSuggestions').innerHTML = '';
+      }
     });
+
+    document.addEventListener('DOMContentLoaded', checkLoginAndLoadItems);
   </script>
 </body>
 </html>
