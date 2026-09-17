@@ -52,12 +52,11 @@
     </table>
   </main>
 
-  <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+  <script src="firebase-config.js?v=2.0"></script>
 
-  <script src="firebase-config.js"></script>
   <script>
     function checkAdminAccess() {
       const user = sessionStorage.getItem('username');
