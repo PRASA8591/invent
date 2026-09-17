@@ -1,83 +1,154 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>My Store</title>
-  <link rel="stylesheet" href="style.css" />
-  <link rel="icon" href="12favicon.png" type="image/png">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Store - Login</title>
+    <!-- Tailwind CSS for Styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Firebase SDKs (v8 Compatibility Layer) -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 </head>
-<body>
-  <div class="login-container">
-    <div class="login-box">
-      <h1>My Store</h1>
-      <input type="text" id="username" placeholder="Username or Email" />
-      <input type="password" id="password" placeholder="Password" />
-      <button onclick="loginUser()">Login</button>
-      <p id="error-message" style="color: red; margin-top: 10px;"></p>
+<body class="bg-slate-900 min-h-screen flex items-center justify-center p-4">
+
+    <!-- Login Container -->
+    <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md text-center">
+        <h1 class="text-3xl font-bold mb-6 text-gray-800">My Store</h1>
+
+        <!-- Alert Message Box -->
+        <div id="alertBox" class="hidden p-3 mb-4 text-sm rounded-lg text-left" role="alert"></div>
+
+        <form id="loginForm" class="space-y-4">
+            <div>
+                <input type="text" id="username" placeholder="Username or Email" required 
+                    class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50">
+            </div>
+            <div>
+                <input type="password" id="password" placeholder="••••••••" required 
+                    class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50">
+            </div>
+            <button type="submit" id="loginBtn" 
+                class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition duration-200">
+                Login
+            </button>
+        </form>
+
+        <p id="errorMessage" class="text-red-500 text-sm mt-4 hidden"></p>
     </div>
-  </div>
 
-  <!-- Firebase SDKs -->
-  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+    <script>
+        // 1. Firebase Configuration
+        const firebaseConfig = {
+            apiKey: "YOUR_API_KEY",
+            authDomain: "inventory-new-379dc.firebaseapp.com",
+            projectId: "inventory-new-379dc",
+            storageBucket: "inventory-new-379dc.appspot.com",
+            messagingSenderId: "YOUR_SENDER_ID",
+            appId: "YOUR_APP_ID"
+        };
 
-  <!-- Firebase Config with Cache-Buster -->
-  <script src="firebase-config.js?v=2.0"></script>
+        // Initialize Firebase
+        if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+        }
+        const auth = firebase.auth();
+        const db = firebase.firestore();
 
-  <script>
-    async function loginUser() {
-      const userInput = document.getElementById('username').value.trim();
-      const password = document.getElementById('password').value;
-      const errorMsg = document.getElementById('error-message');
+        // UI Helpers
+        const showAlert = (msg, type = 'error') => {
+            const alertBox = document.getElementById('alertBox');
+            alertBox.classList.remove('hidden', 'bg-red-100', 'text-red-700', 'bg-green-100', 'text-green-700');
+            if (type === 'success') {
+                alertBox.classList.add('bg-green-100', 'text-green-700');
+            } else {
+                alertBox.classList.add('bg-red-100', 'text-red-700');
+            }
+            alertBox.innerText = msg;
+        };
 
-      errorMsg.innerText = '';
+        // 2. ONE-TIME AUTO CREATE ADMIN FUNCTION
+        async function autoCreateAdmin() {
+            const adminEmail = "admin@gmail.com";
+            const adminPassword = "AdminPassword123";
+            const adminUsername = "admin";
 
-      if (!userInput || !password) {
-        errorMsg.innerText = 'Please enter both username/email and password.';
-        return;
-      }
+            try {
+                // Auth එකේ User හදනවා
+                const userCredential = await auth.createUserWithEmailAndPassword(adminEmail, adminPassword);
+                const uid = userCredential.user.uid;
 
-      try {
-        let targetEmail = userInput;
-        let loggedUsername = userInput;
+                // Firestore 'users' collection එකට දානවා (UID එක document ID එක විදියට)
+                await db.collection('users').doc(uid).set({
+                    username: adminUsername,
+                    email: adminEmail,
+                    role: 'admin',
+                    createdAt: new Date().toISOString()
+                });
 
-        if (!userInput.includes('@')) {
-          const userSnapshot = await db.collection('users')
-            .where('username', '==', userInput)
-            .limit(1)
-            .get();
-
-          if (userSnapshot.empty) {
-            errorMsg.innerText = 'Invalid username or credentials.';
-            return;
-          }
-
-          const userData = userSnapshot.docs[0].data();
-          targetEmail = userData.email;
-          loggedUsername = userData.username || userInput;
+                showAlert("Admin user auto-created successfully! You can now log in.", "success");
+            } catch (error) {
+                if (error.code === 'auth/email-already-in-use') {
+                    console.log("Admin account already exists.");
+                } else {
+                    console.error("Setup Error:", error);
+                }
+            }
         }
 
-        const userCredential = await auth.signInWithEmailAndPassword(targetEmail, password);
-        
-        const userDoc = await db.collection('users').doc(userCredential.user.uid).get();
-        let userRole = 'user';
-        
-        if (userDoc.exists && userDoc.data().role) {
-          userRole = userDoc.data().role;
-        }
+        // 3. LOGIN LOGIC (Supports Username or Email)
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const inputVal = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value.trim();
+            const loginBtn = document.getElementById('loginBtn');
 
-        sessionStorage.setItem('username', loggedUsername);
-        sessionStorage.setItem('role', userRole);
+            loginBtn.innerText = "Logging in...";
+            loginBtn.disabled = true;
 
-        window.location.href = 'dashboard.html';
+            let loginEmail = inputVal;
 
-      } catch (error) {
-        console.error("Login Error:", error);
-        errorMsg.innerText = error.message;
-      }
-    }
-  </script>
+            try {
+                // Email එකක් නෙමෙයි නම් Username එකෙන් Email එක හොයාගන්නවා
+                if (!inputVal.includes('@')) {
+                    const userQuery = await db.collection('users')
+                        .where('username', '==', inputVal.toLowerCase())
+                        .get();
+
+                    if (userQuery.empty) {
+                        throw new Error("auth/user-not-found");
+                    }
+
+                    loginEmail = userQuery.docs[0].data().email;
+                }
+
+                // Firebase Auth Login
+                await auth.signInWithEmailAndPassword(loginEmail, password);
+                
+                // Login Success වූ පසු Redirect වන ස්ථානය
+                window.location.href = "dashboard.html"; // ඔයාගේ Dashboard page එකේ නම යොදන්න
+
+            } catch (error) {
+                console.error("Login Error:", error);
+                if (error.code === 'auth/user-not-found' || error.message === 'auth/user-not-found') {
+                    showAlert("Username or Email not found.");
+                } else if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-login-credentials') {
+                    showAlert("Invalid password or credentials.");
+                } else {
+                    showAlert("Login failed: " + error.message);
+                }
+            } finally {
+                loginBtn.innerText = "Login";
+                loginBtn.disabled = false;
+            }
+        });
+
+        // Run Admin Setup on Page Load
+        window.addEventListener('DOMContentLoaded', () => {
+            autoCreateAdmin();
+        });
+    </script>
 </body>
 </html>
