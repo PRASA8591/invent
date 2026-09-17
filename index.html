@@ -18,22 +18,21 @@
     </div>
   </div>
 
-  <!-- Firebase SDKs (Compat Version) -->
+  <!-- Firebase SDKs -->
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
 
-  <!-- Firebase Config -->
-  <script src="firebase-config.js"></script>
+  <!-- Firebase Config with Cache-Buster -->
+  <script src="firebase-config.js?v=2.0"></script>
 
-  <!-- Login Logic -->
   <script>
     async function loginUser() {
       const userInput = document.getElementById('username').value.trim();
       const password = document.getElementById('password').value;
       const errorMsg = document.getElementById('error-message');
 
-      errorMsg.innerText = ''; // Clear previous error
+      errorMsg.innerText = '';
 
       if (!userInput || !password) {
         errorMsg.innerText = 'Please enter both username/email and password.';
@@ -44,7 +43,6 @@
         let targetEmail = userInput;
         let loggedUsername = userInput;
 
-        // Input එක Email එකක් නෙමෙයි නම් (Username එකක් නම්) Firestore එකෙන් Email එක හොයයි
         if (!userInput.includes('@')) {
           const userSnapshot = await db.collection('users')
             .where('username', '==', userInput)
@@ -61,10 +59,8 @@
           loggedUsername = userData.username || userInput;
         }
 
-        // Firebase Auth හරහා Login වීම
         const userCredential = await auth.signInWithEmailAndPassword(targetEmail, password);
         
-        // Firestore එකෙන් User role එක ලබාගැනීම
         const userDoc = await db.collection('users').doc(userCredential.user.uid).get();
         let userRole = 'user';
         
@@ -72,11 +68,9 @@
           userRole = userDoc.data().role;
         }
 
-        // Session storage එකේ data save කිරීම
         sessionStorage.setItem('username', loggedUsername);
         sessionStorage.setItem('role', userRole);
 
-        // Dashboard එකට මාරු කිරීම
         window.location.href = 'dashboard.html';
 
       } catch (error) {
