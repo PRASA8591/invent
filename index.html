@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title> My Store</title>
+  <title>My Store</title>
   <link rel="stylesheet" href="style.css" />
   <link rel="icon" href="12favicon.png" type="image/png">
 </head>
@@ -11,14 +11,14 @@
   <div class="login-container">
     <div class="login-box">
       <h1>My Store</h1>
-      <input type="text" id="username" placeholder="Username" />
+      <input type="text" id="username" placeholder="Username or Email" />
       <input type="password" id="password" placeholder="Password" />
       <button onclick="loginUser()">Login</button>
-      <p id="error-message"></p>
+      <p id="error-message" style="color: red; margin-top: 10px;"></p>
     </div>
   </div>
 
-  <!-- Firebase SDK -->
+  <!-- Firebase SDKs (Compat Version) -->
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
@@ -29,26 +29,59 @@
   <!-- Login Logic -->
   <script>
     async function loginUser() {
-      const username = document.getElementById('username').value.trim();
+      const userInput = document.getElementById('username').value.trim();
       const password = document.getElementById('password').value;
+      const errorMsg = document.getElementById('error-message');
+
+      errorMsg.innerText = ''; // Clear previous error
+
+      if (!userInput || !password) {
+        errorMsg.innerText = 'Please enter both username/email and password.';
+        return;
+      }
 
       try {
-        const userSnapshot = await db.collection('users')
-          .where('username', '==', username).limit(1).get();
+        let targetEmail = userInput;
+        let loggedUsername = userInput;
 
-        if (userSnapshot.empty) {
-          document.getElementById('error-message').innerText = 'Invalid username';
-          return;
+        // Input එක Email එකක් නෙමෙයි නම් (Username එකක් නම්) Firestore එකෙන් Email එක හොයයි
+        if (!userInput.includes('@')) {
+          const userSnapshot = await db.collection('users')
+            .where('username', '==', userInput)
+            .limit(1)
+            .get();
+
+          if (userSnapshot.empty) {
+            errorMsg.innerText = 'Invalid username or credentials.';
+            return;
+          }
+
+          const userData = userSnapshot.docs[0].data();
+          targetEmail = userData.email;
+          loggedUsername = userData.username || userInput;
         }
 
-        const userData = userSnapshot.docs[0].data();
-        await auth.signInWithEmailAndPassword(userData.email, password);
+        // Firebase Auth හරහා Login වීම
+        const userCredential = await auth.signInWithEmailAndPassword(targetEmail, password);
+        
+        // Firestore එකෙන් User role එක ලබාගැනීම
+        const userDoc = await db.collection('users').doc(userCredential.user.uid).get();
+        let userRole = 'user';
+        
+        if (userDoc.exists && userDoc.data().role) {
+          userRole = userDoc.data().role;
+        }
 
-        sessionStorage.setItem('username', username);
-        sessionStorage.setItem('role', userData.role);
+        // Session storage එකේ data save කිරීම
+        sessionStorage.setItem('username', loggedUsername);
+        sessionStorage.setItem('role', userRole);
+
+        // Dashboard එකට මාරු කිරීම
         window.location.href = 'dashboard.html';
+
       } catch (error) {
-        document.getElementById('error-message').innerText = error.message;
+        console.error("Login Error:", error);
+        errorMsg.innerText = error.message;
       }
     }
   </script>
