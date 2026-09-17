@@ -113,8 +113,10 @@
     }
 
     function logout() {
-      sessionStorage.clear();
-      location.href = 'index.html';
+      auth.signOut().then(() => {
+        sessionStorage.clear();
+        location.href = 'index.html';
+      });
     }
 
     async function loadItems() {
