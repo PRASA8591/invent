@@ -59,7 +59,6 @@
 
   <!-- JS Logic -->
   <script>
-    // Runs after everything is loaded
     window.onload = function () {
       checkAdminAccess();
       document.getElementById("addItemBtn").onclick = addItem;
@@ -80,7 +79,7 @@
     }
 
     function logout() {
-      firebase.auth().signOut().then(() => {
+      auth.signOut().then(() => {
         sessionStorage.clear();
         window.location.href = "index.html";
       });
