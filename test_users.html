@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -22,9 +21,11 @@
     <tbody id="userTable"></tbody>
   </table>
 
-  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
-  <script>
+  <!-- Firebase Modular SDK Script (type="module" ලෙස) -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
+    import { getFirestore, collection, getDocs } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
+
     const firebaseConfig = {
       apiKey: "AIzaSyA3fhxeSNb8MBqkmSsA55XCZaziRQm_FPk",
       authDomain: "inventory-new-379dc.firebaseapp.com",
@@ -34,23 +35,32 @@
       appId: "1:922542802053:web:4058f53a678787207495ec",
       measurementId: "G-728ZE17NHY"
     };
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.firestore();
 
-    db.collection('users').get().then(snapshot => {
-      const table = document.getElementById('userTable');
-      snapshot.forEach(doc => {
-        const user = doc.data();
-        const row = `<tr>
-          <td>${user.username}</td>
-          <td>${user.email}</td>
-          <td>${user.role}</td>
-        </tr>`;
-        table.innerHTML += row;
-      });
-    }).catch(err => {
-      document.body.innerHTML += '<p style="color:red;">Error: ' + err.message + '</p>';
-    });
+    // Firebase Initialize කිරීම
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    // Firestore වෙතින් Users Data ලබාගැනීම
+    async function loadUsers() {
+      try {
+        const querySnapshot = await getDocs(collection(db, 'users'));
+        const table = document.getElementById('userTable');
+        
+        querySnapshot.forEach(doc => {
+          const user = doc.data();
+          const row = `<tr>
+            <td>${user.username || ''}</td>
+            <td>${user.email || ''}</td>
+            <td>${user.role || ''}</td>
+          </tr>`;
+          table.innerHTML += row;
+        });
+      } catch (err) {
+        document.body.innerHTML += '<p style="color:red;">Error: ' + err.message + '</p>';
+      }
+    }
+
+    loadUsers();
   </script>
 </body>
 </html>
